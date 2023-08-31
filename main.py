@@ -112,9 +112,8 @@ def read_frame(frame_path):
 
 def get_background_image(dir_path):
     file_list = os.listdir(dir_path)
-    # file_list.sort()
     background = read_frame(os.path.join(dir_path, file_list[0]))
-
+    return background
 
 def find_ball_all_frames(dir_path):
     file_list = os.listdir(dir_path)
@@ -142,14 +141,13 @@ def plot_ball_trajectory_3D(background, trajectory):
     plt.imshow(background)
     # Plot the trajectory points
     plt.plot(trajectory[:, 1], trajectory[:, 0], marker='o', color='red')
-
     plt.axis('off')  # Turn off axis
     plt.show()
 
 
 if __name__ == '__main__':
     # radii, centers = find_ball_all_frames("ball frames video 2")
+    background = get_background_image("ball frames video 2")
     centers = np.load('centers_video_2.npy')
     radii = np.load('radii_video_2.npy')
-    centers = np.array(centers)
-    radii = np.array(radii)
+    plot_ball_trajectory_3D(background, centers)
