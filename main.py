@@ -6,30 +6,15 @@ import matplotlib.pyplot as plt # For plotting and displaying images
 import skimage.io
 import skimage.measure
 from skimage import io, color, transform, util
-from skimage.morphology import binary_closing, disk, binary_erosion
+from skimage.morphology import binary_closing, disk, binary_erosion, binary_opening, remove_small_objects
 import scipy.stats as stats
 import skimage.draw as draw
-
+from scipy.ndimage.measurements import center_of_mass
 # load all frames from directory to numpy array
-
-
-def load_frames_to_array(dir_path):
-    file_list = os.listdir(dir_path)
-    file_list.sort()
-
-    frame_list = []
-    # Loop through the files in the directory
-    for i, file in enumerate(file_list):
-        # Construct the full file path by joining the directory and file names
-        file_path = os.path.join(dir_path, file)
-        # Read the image from the file using cv2.imread
-        frame = cv2.imread(file_path)
-        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
-        frame_list.append(frame)
-
-    # Convert the frame list to a numpy array using np.array
-    frame_array = np.array(frame_list)
-    return frame_array
+from skimage import io, color, transform
+from skimage.feature import peak_local_max
+from skimage.transform import hough_circle, hough_circle_peaks
+from scipy.signal import convolve2d
 
 
 def draw_circle(image, center, radius):
@@ -40,57 +25,25 @@ def draw_circle(image, center, radius):
     skimage.io.show()
 
 
-def find_ball(img, background):
-    img = img - background
-    img[img > 170] = 0
-    img[img < 20] = 0
-    img[img > 0] = 1
+def show_image(image):
+    io.imshow(image)
+    io.show()
 
-    # Show the original image and the mask
-    skimage.io.imshow(img)
-    skimage.io.show()
 
-    # Apply label()
-    labels = skimage.measure.label(img)
-    # Get the regionprops
-    regions = skimage.measure.regionprops(labels)
-    # Get the largest region
-    max_region = regions[0]
-    for region in regions[1:]:
-        if region.area > max_region.area:
-            max_region = region
-
-    # Create a mask with the largest region
-    mask = np.zeros_like(labels)
-    mask[labels == max_region.label] = 255
-
-    # Show the original image and the mask
-    skimage.io.imshow(mask)
-    skimage.io.show()
-
-    radius = 30
+def find_edges(binary_image, radius=2):
     footprint = disk(radius)  # create a circular footprint
-    closed = binary_closing(mask, footprint)  # get the closed image
-    # skimage.io.imshow(closed)
-    # skimage.io.show()
+    eroded = binary_erosion(binary_image, footprint)
+    edge = binary_image.astype(int) - eroded.astype(int)
+    return edge
 
-    radius = 1
-    footprint = disk(radius)  # create a circular footprint
-    eroded = binary_erosion(closed, footprint)
-    edge = closed.astype(int) - eroded.astype(int)
-    # # Show the result
-    # io.imshow(edge)
-    # io.show()
-    rows, cols = np.where(edge == 1)  # get the row and column indices of pixels equal 1
-    points = np.array(list(zip(rows, cols)))   # zip them together to get a list of coordinates
 
-    # num_points = 100
+def fit_circle_to_edge(points):
     num_points = points.shape[0]
-    indices = np.random.choice(points.shape[0], num_points, replace=False)  # select 50 random indices
+    indices = np.random.choice(points.shape[0], num_points, replace=False)  # select N random indices
     furthest_points = []  # a list to store the furthest points
     point_pairs = []
     points_array = np.zeros((num_points, 3, 2))
-    for i, ind in enumerate(indices) :  # loop over the selected indices
+    for i, ind in enumerate(indices):  # loop over the selected indices
         point = points[ind]  # get the current point
         distances = np.linalg.norm(points - point,
                                    axis=1)  # compute the L2 norm between the current point and all other points
@@ -103,26 +56,104 @@ def find_ball(img, background):
         points_array[i, 2, 1] = furthest_distance
         point_pairs.append((point, furthest_point, furthest_distance))
 
+    final_pnts, median = remove_outliers(points_array)
+    final_radius = int(median / 2)
+    final_center = np.round(np.mean(final_pnts, axis=0)).astype(int)
+    return final_center, final_radius
+
+
+def remove_outliers(points_array):
     distances = points_array[:, 2, 1]
     mad = stats.median_abs_deviation(distances)  # compute the MAD along the axis
     median = np.median(distances)  # compute the median along the axis
     threshold = 1  # set a threshold for outliers
     outliers = np.abs(distances - median) / mad > threshold  # create a boolean mask for outliers
-    final_pnts = points_array[~outliers, :, :]
-    final_pnts = np.concatenate((final_pnts[:, 0, :], final_pnts[:, 1, :]), axis=0)
-    final_radius = int(median / 2)
-    final_center = np.round(np.mean(final_pnts, axis=0)).astype(int)
+    points_array = points_array[~outliers, :, :]
+    final_pnts = np.concatenate((points_array[:, 0, :], points_array[:, 1, :]), axis=0)
+    return final_pnts, median
+
+
+def find_edge_points(mask):
+    edge = find_edges(mask)
+    rows, cols = np.where(edge == 1)  # get the row and column indices of pixels equal 1
+    points = np.array(list(zip(rows, cols)))  # zip them together to get a list of coordinates
+    median = np.median(points, axis=0)
+    distace_from_median = np.linalg.norm(points - median, axis=1)
+    points = points[distace_from_median < 200]
+    return points
+
+# def efficient_binary(mask, footpring, operation):
+
+
+
+def segment_ball(img, background):
+    img = img - background
+    img[img > 170] = 0
+    img[img < 20] = 0
+    img[img > 0] = 1
+    footprint = disk(3)  # create a circular footprint
+    mask = binary_opening(img, footprint)
+    footprint = disk(5)  # create a circular footprint
+    mask = binary_closing(mask, footprint)  # get the closed image
+    return mask
+
+
+def find_ball_in_frame(img, background):
+    mask = segment_ball(img, background)
+    points = find_edge_points(mask)
+    final_center, final_radius = fit_circle_to_edge(points)
     return final_radius, final_center
 
 
+def read_frame(frame_path):
+    frame = cv2.imread(frame_path)
+    frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    return frame
+
+def get_background_image(dir_path):
+    file_list = os.listdir(dir_path)
+    # file_list.sort()
+    background = read_frame(os.path.join(dir_path, file_list[0]))
+
+
+def find_ball_all_frames(dir_path):
+    file_list = os.listdir(dir_path)
+    # file_list.sort()
+    background = read_frame(os.path.join(dir_path, file_list[0]))
+    radii = []
+    centers = []
+    for i, file in enumerate(file_list):
+        if i < 1: continue
+        # if i > 30: break
+        print(i)
+        file_path = os.path.join(dir_path, file)
+        frame = read_frame(file_path)
+        radius, center = find_ball_in_frame(frame, background)
+        # draw_circle(frame, center, radius)
+        radii.append(radius)
+        centers.append(center)
+
+    np.save('centers_video_2.npy', np.array(centers))
+    np.save('radii_video_2.npy', np.array(radii))
+    return radii, centers, background
+
+
+def plot_ball_trajectory_3D(background, trajectory):
+    plt.imshow(background)
+    # Plot the trajectory points
+    plt.plot(trajectory[:, 1], trajectory[:, 0], marker='o', color='red')
+
+    plt.axis('off')  # Turn off axis
+    plt.show()
+
+
 if __name__ == '__main__':
-    frame_array = load_frames_to_array("ball frames")
-    background = frame_array[0]
-    first = frame_array[3]
-    frame = first
-    num_frames = frame_array.shape[0] - 1
-    for frame_num in range(20, num_frames):
-        frame = frame_array[frame_num]
-        final_radius, final_center = find_ball(frame, background)
-        draw_circle(frame, final_center, final_radius)
+    # radii, centers = find_ball_all_frames("ball frames video 2")
+    centers = np.load('centers_video_2.npy')
+    radii = np.load('radii_video_2.npy')
+    centers = np.array(centers)
+    radii = np.array(radii)
+    a=0
+
+    plot_ball_trajectory_3D(background, centers)
 

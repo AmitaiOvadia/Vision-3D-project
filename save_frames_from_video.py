@@ -3,9 +3,9 @@ import cv2  # For video processing
 import os  # For creating directories and paths
 
 # Define the video path, the output directory and the frame interval
-video_path = "ball1.mp4"  # The path of the mp4 video file
-output_dir = "ball frames"  # The name of the output directory
-d = 1  # The number of frames to skip between each saved frame
+video_path = "ball frames video 2/Ball video 2 SM.mp4"  # The path of the mp4 video file
+output_dir = "ball frames video 2"  # The name of the output directory
+d = 2  # The number of frames to skip between each saved frame
 
 # Create the output directory if it does not exist
 if not os.path.exists(output_dir):
@@ -35,10 +35,10 @@ while True:
     if frame_count % d == 0:
         # Construct the output file name using the frame number
         start = "frame_"
-        if frame_count < 100:
-            start = "frame_0"
-            if frame_count < 10:
-                start = "frame_00"
+        # if frame_count < 100:
+        #     start = "frame_0"
+        #     if frame_count < 10:
+        #         start = "frame_00"
         output_file = os.path.join(output_dir, f"{start}{frame_count}.png")
         # Save the frame as a png image using cv2.imwrite
         cv2.imwrite(output_file, frame)
