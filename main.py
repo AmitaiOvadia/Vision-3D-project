@@ -153,7 +153,3 @@ if __name__ == '__main__':
     radii = np.load('radii_video_2.npy')
     centers = np.array(centers)
     radii = np.array(radii)
-    a=0
-
-    plot_ball_trajectory_3D(background, centers)
-
