@@ -85,7 +85,6 @@ def find_edge_points(mask):
 # def efficient_binary(mask, footpring, operation):
 
 
-
 def segment_ball(img, background):
     img = img - background
     img[img > 170] = 0
@@ -95,14 +94,10 @@ def segment_ball(img, background):
     mask = binary_opening(img, footprint)
     footprint = disk(5)  # create a circular footprint
     mask = binary_closing(mask, footprint)  # get the closed image
+
+    min_size = 500  # Define the minimum size of the objects to keep
+    mask = remove_small_objects(mask, min_size=min_size, connectivity=1)  # Remove small objects
     return mask
-
-
-def find_ball_in_frame(img, background):
-    mask = segment_ball(img, background)
-    points = find_edge_points(mask)
-    final_center, final_radius = fit_circle_to_edge(points)
-    return final_radius, final_center
 
 
 def read_frame(frame_path):
@@ -115,6 +110,15 @@ def get_background_image(dir_path):
     background = read_frame(os.path.join(dir_path, file_list[0]))
     return background
 
+
+def find_ball_in_frame(img, background):
+    mask = segment_ball(img, background)
+    points = find_edge_points(mask)
+    final_center, final_radius = fit_circle_to_edge(points)
+    return final_radius, final_center
+
+
+
 def find_ball_all_frames(dir_path):
     file_list = os.listdir(dir_path)
     # file_list.sort()
@@ -123,7 +127,6 @@ def find_ball_all_frames(dir_path):
     centers = []
     for i, file in enumerate(file_list):
         if i < 1: continue
-        # if i > 30: break
         print(i)
         file_path = os.path.join(dir_path, file)
         frame = read_frame(file_path)
@@ -132,22 +135,31 @@ def find_ball_all_frames(dir_path):
         radii.append(radius)
         centers.append(center)
 
-    np.save('centers_video_2.npy', np.array(centers))
-    np.save('radii_video_2.npy', np.array(radii))
-    return radii, centers, background
+    np.save('Ball videos 3\centers_throw_2.npy', np.array(centers))
+    np.save(r'Ball videos 3\radii_throw_2.npy', np.array(radii))
+    return radii, centers
 
 
 def plot_ball_trajectory_3D(background, trajectory):
     plt.imshow(background)
     # Plot the trajectory points
-    plt.plot(trajectory[:, 1], trajectory[:, 0], marker='o', color='red')
+    plt.plot(trajectory[:, 1], trajectory[:, 0], marker='o', color='red', markersize=2)
     plt.axis('off')  # Turn off axis
     plt.show()
 
 
+def array_2_list_of_tuples(arr):
+    lst = arr.tolist()  # Convert to a list of lists
+    result = [tuple(x) for x in lst]  # Convert each sublist to a tuple
+    return result
+
+
 if __name__ == '__main__':
-    # radii, centers = find_ball_all_frames("ball frames video 2")
-    background = get_background_image("ball frames video 2")
-    centers = np.load('centers_video_2.npy')
-    radii = np.load('radii_video_2.npy')
+    path = "Ball videos 3/throw 2 frames"
+    # radii, centers = find_ball_all_frames(path)
+    background = get_background_image(path)
+    centers = np.load('Ball videos 3\centers_throw_2.npy')
+    radii = np.load(r'Ball videos 3\radii_throw_2.npy')
+    # centers = array_2_list_of_tuples(centers)
     plot_ball_trajectory_3D(background, centers)
+    a=0
